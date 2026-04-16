@@ -31,7 +31,40 @@
             android:layout_height="wrap_content"
             android:textSize="14sp"
             android:textColor="@android:color/darker_gray"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tvOverallRating"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textStyle="bold"
             android:layout_marginBottom="16dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnEdit"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="✏️ Редактировать"
+                android:layout_marginEnd="8dp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnDelete"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🗑️ Удалить"
+                android:backgroundTint="@android:color/holo_red_dark"
+                android:visibility="gone" />
+
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
@@ -39,6 +72,7 @@
             android:text="📝 Описание:"
             android:textStyle="bold"
             android:textSize="16sp"
+            android:layout_marginTop="16dp"
             android:layout_marginBottom="8dp" />
 
         <TextView
@@ -78,33 +112,22 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="⭐ Ваша оценка:"
+            android:text="💬 Отзывы:"
             android:textStyle="bold"
             android:textSize="16sp"
             android:layout_marginBottom="8dp" />
 
-        <RatingBar
-            android:id="@+id/ratingBar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:numStars="5"
-            android:stepSize="1"
-            android:layout_marginBottom="16dp" />
-
         <Button
-            android:id="@+id/btnRate"
+            android:id="@+id/btnAddReview"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="⭐ Оценить рецепт"
+            android:text="➕ Добавить отзыв"
             android:layout_marginBottom="8dp" />
 
-        <Button
-            android:id="@+id/btnDelete"
+        <ListView
+            android:id="@+id/listViewReviews"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="🗑️ Удалить рецепт"
-            android:backgroundTint="@android:color/holo_red_dark"
-            android:visibility="gone" />
+            android:layout_height="wrap_content" />
 
     </LinearLayout>
 </ScrollView>

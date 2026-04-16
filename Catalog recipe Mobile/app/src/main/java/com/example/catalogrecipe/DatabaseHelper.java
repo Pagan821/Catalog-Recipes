@@ -13,11 +13,11 @@ import java.util.List;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME = "recipes.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 3;
 
     private static final String TABLE_USERS = "users";
     private static final String TABLE_RECIPES = "recipes";
-    private static final String TABLE_RATINGS = "ratings";
+    private static final String TABLE_REVIEWS = "reviews";
 
     public DatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -25,19 +25,24 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
+        // Таблица пользователей
         db.execSQL("CREATE TABLE " + TABLE_USERS + " (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "username TEXT UNIQUE, password TEXT, is_admin INTEGER DEFAULT 0)");
 
+        // Таблица рецептов (без отдельной таблицы оценок)
         db.execSQL("CREATE TABLE " + TABLE_RECIPES + " (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "title TEXT, description TEXT, ingredients TEXT, instructions TEXT, " +
                 "image BLOB, author_id INTEGER, rating REAL DEFAULT 0, rating_count INTEGER DEFAULT 0)");
 
-        db.execSQL("CREATE TABLE " + TABLE_RATINGS + " (" +
+        // Таблица отзывов (теперь основная для оценок)
+        db.execSQL("CREATE TABLE " + TABLE_REVIEWS + " (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                "recipe_id INTEGER, user_id INTEGER, rating_value INTEGER, " +
-                "UNIQUE(recipe_id, user_id))");
+                "recipe_id INTEGER, user_id INTEGER, username TEXT, " +
+                "review_text TEXT, rating INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                "UNIQUE(recipe_id, user_id), " +
+                "FOREIGN KEY(recipe_id) REFERENCES " + TABLE_RECIPES + "(id))");
 
         // Админ по умолчанию
         ContentValues admin = new ContentValues();
@@ -49,7 +54,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        db.execSQL("DROP TABLE IF EXISTS " + TABLE_RATINGS);
+        db.execSQL("DROP TABLE IF EXISTS " + TABLE_REVIEWS);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_RECIPES);
         db.execSQL("DROP TABLE IF EXISTS " + TABLE_USERS);
         onCreate(db);
@@ -104,6 +109,25 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return result != -1;
     }
 
+    public boolean updateRecipe(Recipe recipe) {
+        SQLiteDatabase db = getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("title", recipe.getTitle());
+        values.put("description", recipe.getDescription());
+        values.put("ingredients", recipe.getIngredients());
+        values.put("instructions", recipe.getInstructions());
+
+        if (recipe.getImage() != null) {
+            ByteArrayOutputStream stream = new ByteArrayOutputStream();
+            recipe.getImage().compress(Bitmap.CompressFormat.PNG, 100, stream);
+            values.put("image", stream.toByteArray());
+        }
+
+        int result = db.update(TABLE_RECIPES, values, "id=?", new String[]{String.valueOf(recipe.getId())});
+        db.close();
+        return result > 0;
+    }
+
     public List<Recipe> getAllRecipes() {
         List<Recipe> recipes = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
@@ -131,6 +155,36 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         cursor.close();
         db.close();
         return recipes;
+    }
+
+    public Recipe getRecipeById(int recipeId) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT r.*, u.username FROM " + TABLE_RECIPES + " r " +
+                "LEFT JOIN " + TABLE_USERS + " u ON r.author_id = u.id WHERE r.id=?", new String[]{String.valueOf(recipeId)});
+
+        if (cursor.moveToFirst()) {
+            Recipe recipe = new Recipe();
+            recipe.setId(cursor.getInt(0));
+            recipe.setTitle(cursor.getString(1));
+            recipe.setDescription(cursor.getString(2));
+            recipe.setIngredients(cursor.getString(3));
+            recipe.setInstructions(cursor.getString(4));
+            recipe.setAuthorId(cursor.getInt(6));
+            recipe.setRating(cursor.getFloat(7));
+            recipe.setRatingCount(cursor.getInt(8));
+            recipe.setAuthorName(cursor.getString(9));
+
+            byte[] imageBytes = cursor.getBlob(5);
+            if (imageBytes != null) {
+                recipe.setImage(BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length));
+            }
+            cursor.close();
+            db.close();
+            return recipe;
+        }
+        cursor.close();
+        db.close();
+        return null;
     }
 
     public List<Recipe> searchRecipes(String query) {
@@ -165,46 +219,97 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return recipes;
     }
 
-    public boolean rateRecipe(int recipeId, int userId, int rating) {
+    // Добавление отзыва и обновление рейтинга рецепта
+    public boolean addReview(int recipeId, int userId, String username, String reviewText, int rating) {
         SQLiteDatabase db = getWritableDatabase();
 
-        // Проверка
-        Cursor cursor = db.query(TABLE_RATINGS, new String[]{"id"},
+        Cursor authorCursor = db.query(TABLE_RECIPES, new String[]{"author_id"},
+                "id=?", new String[]{String.valueOf(recipeId)}, null, null, null);
+        if (authorCursor.moveToFirst()) {
+            int authorId = authorCursor.getInt(0);
+            if (authorId == userId) {
+                authorCursor.close();
+                db.close();
+                return false;
+            }
+        }
+        authorCursor.close();
+
+        // Проверка на повторный отзыв
+        Cursor checkCursor = db.query(TABLE_REVIEWS, new String[]{"id"},
                 "recipe_id=? AND user_id=?", new String[]{String.valueOf(recipeId), String.valueOf(userId)},
                 null, null, null);
 
-        if (cursor.moveToFirst()) {
-            cursor.close();
+        if (checkCursor.moveToFirst()) {
+            checkCursor.close();
             db.close();
             return false;
         }
-        cursor.close();
+        checkCursor.close();
 
-        // Добавляем оценку
-        ContentValues ratingValues = new ContentValues();
-        ratingValues.put("recipe_id", recipeId);
-        ratingValues.put("user_id", userId);
-        ratingValues.put("rating_value", rating);
-        db.insert(TABLE_RATINGS, null, ratingValues);
+        // Добавляем отзыв
+        ContentValues values = new ContentValues();
+        values.put("recipe_id", recipeId);
+        values.put("user_id", userId);
+        values.put("username", username);
+        values.put("review_text", reviewText);
+        values.put("rating", rating);
 
-        // Обновляем средний рейтинг
-        Cursor avgCursor = db.rawQuery("SELECT AVG(rating_value), COUNT(*) FROM " + TABLE_RATINGS +
+        long result = db.insert(TABLE_REVIEWS, null, values);
+
+        if (result != -1) {
+            updateRecipeRating(recipeId);
+        }
+
+        db.close();
+        return result != -1;
+    }
+
+    // Обновление рейтинга рецепта на основе всех отзывов
+    private void updateRecipeRating(int recipeId) {
+        SQLiteDatabase db = getWritableDatabase();
+        Cursor avgCursor = db.rawQuery("SELECT AVG(rating), COUNT(*) FROM " + TABLE_REVIEWS +
                 " WHERE recipe_id=?", new String[]{String.valueOf(recipeId)});
 
         if (avgCursor.moveToFirst()) {
+            float newRating = (float) avgCursor.getDouble(0);
+            int ratingCount = avgCursor.getInt(1);
+
             ContentValues recipeValues = new ContentValues();
-            recipeValues.put("rating", avgCursor.getDouble(0));
-            recipeValues.put("rating_count", avgCursor.getInt(1));
+            recipeValues.put("rating", newRating);
+            recipeValues.put("rating_count", ratingCount);
             db.update(TABLE_RECIPES, recipeValues, "id=?", new String[]{String.valueOf(recipeId)});
         }
         avgCursor.close();
         db.close();
-        return true;
+    }
+
+    // Получение всех отзывов для рецепта
+    public List<Review> getReviewsForRecipe(int recipeId) {
+        List<Review> reviews = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT * FROM " + TABLE_REVIEWS +
+                " WHERE recipe_id=? ORDER BY created_at DESC", new String[]{String.valueOf(recipeId)});
+
+        while (cursor.moveToNext()) {
+            Review review = new Review();
+            review.setId(cursor.getInt(0));
+            review.setRecipeId(cursor.getInt(1));
+            review.setUserId(cursor.getInt(2));
+            review.setUsername(cursor.getString(3));
+            review.setReviewText(cursor.getString(4));
+            review.setRating(cursor.getInt(5));
+            review.setCreatedAt(cursor.getString(6));
+            reviews.add(review);
+        }
+        cursor.close();
+        db.close();
+        return reviews;
     }
 
     public boolean deleteRecipe(int recipeId) {
         SQLiteDatabase db = getWritableDatabase();
-        db.delete(TABLE_RATINGS, "recipe_id=?", new String[]{String.valueOf(recipeId)});
+        db.delete(TABLE_REVIEWS, "recipe_id=?", new String[]{String.valueOf(recipeId)});
         int result = db.delete(TABLE_RECIPES, "id=?", new String[]{String.valueOf(recipeId)});
         db.close();
         return result > 0;
@@ -240,14 +345,25 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         return recipes;
     }
 
-    public boolean hasUserRatedRecipe(int recipeId, int userId) {
+    public boolean hasUserReviewed(int recipeId, int userId) {
         SQLiteDatabase db = getReadableDatabase();
-        Cursor cursor = db.query(TABLE_RATINGS, new String[]{"id"},
+        Cursor cursor = db.query(TABLE_REVIEWS, new String[]{"id"},
                 "recipe_id=? AND user_id=?", new String[]{String.valueOf(recipeId), String.valueOf(userId)},
                 null, null, null);
         boolean exists = cursor.moveToFirst();
         cursor.close();
         db.close();
         return exists;
+    }
+
+    public boolean isRecipeAuthor(int recipeId, int userId) {
+        SQLiteDatabase db = getReadableDatabase();
+        Cursor cursor = db.query(TABLE_RECIPES, new String[]{"id"},
+                "id=? AND author_id=?", new String[]{String.valueOf(recipeId), String.valueOf(userId)},
+                null, null, null);
+        boolean isAuthor = cursor.moveToFirst();
+        cursor.close();
+        db.close();
+        return isAuthor;
     }
 }

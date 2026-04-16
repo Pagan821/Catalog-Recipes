@@ -44,7 +44,6 @@ public class RecipeActivity extends AppCompatActivity {
         btnShowAll = findViewById(R.id.btnShowAll);
         spinnerFilter = findViewById(R.id.spinnerFilter);
 
-        // Фильтр: Все рецепты / Мои рецепты
         String[] filters = {"Все рецепты", "Мои рецепты"};
         ArrayAdapter<String> filterAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, filters);
         filterAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -54,6 +53,15 @@ public class RecipeActivity extends AppCompatActivity {
 
         btnSearch.setOnClickListener(v -> searchRecipes());
         btnShowAll.setOnClickListener(v -> loadRecipes());
+
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            Intent intent = new Intent(RecipeActivity.this, RecipeDetailActivity.class);
+            intent.putExtra("recipe_id", currentRecipes.get(position).getId());
+            intent.putExtra("user_id", userId);
+            intent.putExtra("username", username);
+            intent.putExtra("is_admin", isAdmin);
+            startActivity(intent);
+        });
 
         spinnerFilter.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -69,11 +77,12 @@ public class RecipeActivity extends AppCompatActivity {
             Intent intent = new Intent(RecipeActivity.this, RecipeDetailActivity.class);
             intent.putExtra("recipe_id", currentRecipes.get(position).getId());
             intent.putExtra("user_id", userId);
+            intent.putExtra("username", username);
             intent.putExtra("is_admin", isAdmin);
             startActivity(intent);
         });
 
-        // Для админа - долгое нажатие для удаления
+
         if (isAdmin) {
             listView.setOnItemLongClickListener((parent, view, position, id) -> {
                 showDeleteDialog(currentRecipes.get(position));
@@ -228,8 +237,7 @@ public class RecipeActivity extends AppCompatActivity {
         if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
             try {
                 selectedImage = MediaStore.Images.Media.getBitmap(this.getContentResolver(), data.getData());
-                ImageView ivImage = findViewById(R.id.ivImage); // Эта строка может вызвать проблему, но в диалоге ImageView не доступен так просто
-                // Для правильной работы нужно сохранять ссылку на ImageView из диалога
+                ImageView ivImage = findViewById(R.id.ivImage);
             } catch (IOException e) {
                 e.printStackTrace();
                 Toast.makeText(this, "Ошибка загрузки изображения", Toast.LENGTH_SHORT).show();
