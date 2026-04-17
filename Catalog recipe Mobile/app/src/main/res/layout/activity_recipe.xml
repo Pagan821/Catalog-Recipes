@@ -14,22 +14,22 @@
         <EditText
             android:id="@+id/etSearch"
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="65dp"
             android:layout_weight="1"
-            android:hint="🔍 Поиск рецептов..."
-            android:padding="8dp"
-            android:background="@android:drawable/editbox_background" />
+            android:background="@android:drawable/editbox_background"
+            android:hint="Поиск"
+            android:padding="8dp" />
 
         <Button
             android:id="@+id/btnSearch"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="64dp"
             android:text="Найти" />
 
         <Button
             android:id="@+id/btnShowAll"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="64dp"
             android:text="Все" />
     </LinearLayout>
 
