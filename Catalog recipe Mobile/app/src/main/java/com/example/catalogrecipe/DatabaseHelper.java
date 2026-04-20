@@ -366,4 +366,19 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return isAuthor;
     }
+
+    public boolean deleteReview(int reviewId, int recipeId) {
+        SQLiteDatabase db = getWritableDatabase();
+        int result = db.delete(TABLE_REVIEWS, "id=?", new String[]{String.valueOf(reviewId)});
+
+        if (result > 0) {
+            // Обновляем рейтинг рецепта после удаления отзыва
+            updateRecipeRating(recipeId);
+        }
+
+        db.close();
+        return result > 0;
+    }
+
+
 }

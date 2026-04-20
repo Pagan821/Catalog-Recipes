@@ -67,10 +67,7 @@ public class RecipeDetailActivity extends AppCompatActivity {
             btnEdit.setOnClickListener(v -> showEditDialog());
             btnAddReview.setEnabled(false);
             btnAddReview.setText("Автор не может оставить отзыв");
-        }
-
-        // Проверяем, оставлял ли пользователь уже отзыв
-        if (!isAuthor && dbHelper.hasUserReviewed(recipeId, userId)) {
+        } else if (dbHelper.hasUserReviewed(recipeId, userId)) {
             btnAddReview.setEnabled(false);
             btnAddReview.setText("✓ Вы уже оставили отзыв");
         }
@@ -104,9 +101,21 @@ public class RecipeDetailActivity extends AppCompatActivity {
 
     private void loadReviews() {
         List<Review> reviews = dbHelper.getReviewsForRecipe(currentRecipe.getId());
-        ReviewAdapter adapter = new ReviewAdapter(this, reviews);
-        listViewReviews.setAdapter(adapter);
 
+        // Создаем адаптер с возможностью удаления
+        ReviewAdapter adapter = new ReviewAdapter(this, reviews, userId, () -> {
+            // Обновляем данные после удаления отзыва
+            loadRecipe(currentRecipe.getId());
+            loadReviews();
+
+            // Проверяем, остались ли отзывы у пользователя
+            if (!dbHelper.hasUserReviewed(currentRecipe.getId(), userId)) {
+                btnAddReview.setEnabled(true);
+                btnAddReview.setText("➕ Добавить отзыв");
+            }
+        });
+
+        listViewReviews.setAdapter(adapter);
         setListViewHeightBasedOnItems(listViewReviews);
     }
 
