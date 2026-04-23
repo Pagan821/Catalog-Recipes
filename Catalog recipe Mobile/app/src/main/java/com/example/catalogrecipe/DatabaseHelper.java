@@ -191,10 +191,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         List<Recipe> recipes = new ArrayList<>();
         SQLiteDatabase db = getReadableDatabase();
         String searchPattern = "%" + query + "%";
+
+        // Добавляем поиск по имени автора (u.username)
         Cursor cursor = db.rawQuery("SELECT r.*, u.username FROM " + TABLE_RECIPES + " r " +
                         "LEFT JOIN " + TABLE_USERS + " u ON r.author_id = u.id " +
-                        "WHERE r.title LIKE ? OR r.description LIKE ? OR r.ingredients LIKE ?",
-                new String[]{searchPattern, searchPattern, searchPattern});
+                        "WHERE r.title LIKE ? OR r.description LIKE ? OR r.ingredients LIKE ? OR u.username LIKE ?",
+                new String[]{searchPattern, searchPattern, searchPattern, searchPattern});
 
         while (cursor.moveToNext()) {
             Recipe recipe = new Recipe();
